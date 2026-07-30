@@ -228,6 +228,29 @@ static void test_boundaries_elevations_and_occupancy(void)
     game_rules_engine_destroy(engine);
 }
 
+static void test_walk_on_barrel_tops(void)
+{
+    game_rules_cell cells[3];
+    game_rules_entity entities[3] = {
+        {17U, GAME_RULES_ENTITY_PLAYER, {0, 0}, 2},
+        {4U, GAME_RULES_ENTITY_BARREL, {1, 0}, 0},
+        {5U, GAME_RULES_ENTITY_BARREL, {2, 0}, 0}};
+    game_rules_level_definition level = grid_level(
+        cells, 3U, 1U, (game_rules_coordinate){0, 0},
+        GAME_RULES_HORIZONTAL_EAST, GAME_RULES_VERTICAL_NORTH,
+        NULL, 0U, entities, 3U);
+    game_rules_engine* engine;
+
+    cells[0].elevation = 1;
+    engine = game_rules_engine_create();
+    expect_loaded(engine, &level);
+    expect_walk(engine, GAME_RULES_DIRECTION_EAST, (game_rules_coordinate){0, 0},
+                (game_rules_coordinate){1, 0}, 2);
+    expect_walk(engine, GAME_RULES_DIRECTION_EAST, (game_rules_coordinate){1, 0},
+                (game_rules_coordinate){2, 0}, 2);
+    game_rules_engine_destroy(engine);
+}
+
 static void test_fixture_geometry_terminal_and_invalid_rejections(void)
 {
     game_rules_cell cells[3];
@@ -311,6 +334,7 @@ int main(void)
 {
     test_cardinal_orientation_and_repetition();
     test_boundaries_elevations_and_occupancy();
+    test_walk_on_barrel_tops();
     test_fixture_geometry_terminal_and_invalid_rejections();
     return 0;
 }

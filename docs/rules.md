@@ -178,8 +178,8 @@ resolved state in a fresh history.
 - The player cannot climb a ledge.
 - The player cannot voluntarily walk down a ledge.
 - The player changes elevation only by traversing a ramp.
-- The player may walk onto the top of a box when that box's top is at the same
-  height as the player's current supporting surface.
+- The player may walk onto the top of a box or barrel when that entity's top is
+  at the same height as the player's current supporting surface.
 - A closed door and an ineligible teleporter cell block walking.
 
 ### Player pushing
