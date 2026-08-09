@@ -298,6 +298,24 @@ uint32_t game_rules_engine_get_state_data(const game_rules_engine* engine,
     return game_rules_c_get_state_data(engine, out_result);
 }
 
+uint32_t game_rules_engine_load_level_json_data(game_rules_engine* engine,
+                                                const char* level_json,
+                                                uint32_t level_json_length,
+                                                game_rules_json_load_result* out_result)
+{
+    if (out_result == NULL || level_json == NULL) {
+        if (out_result != NULL) {
+            memset(out_result, 0, sizeof(*out_result));
+        }
+        return GAME_RULES_CALL_INVALID_ARGUMENT;
+    }
+    memset(out_result, 0, sizeof(*out_result));
+    if (engine == NULL) {
+        return GAME_RULES_CALL_INVALID_ENGINE;
+    }
+    return game_rules_c_load_json_data(engine, level_json, level_json_length, out_result);
+}
+
 uint32_t game_rules_engine_load_level_data(game_rules_engine* engine,
                                            const game_rules_level_definition* level,
                                            game_rules_load_result* out_result)
@@ -352,6 +370,11 @@ static void dispose_result(void* owned_storage, void* result, size_t result_size
 }
 
 void game_rules_state_result_dispose(game_rules_state_result* result)
+{
+    dispose_result(result == NULL ? NULL : result->owned_storage, result, sizeof(*result));
+}
+
+void game_rules_json_load_result_dispose(game_rules_json_load_result* result)
 {
     dispose_result(result == NULL ? NULL : result->owned_storage, result, sizeof(*result));
 }

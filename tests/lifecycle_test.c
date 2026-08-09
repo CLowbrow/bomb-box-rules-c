@@ -31,6 +31,7 @@ int main(void)
 {
     game_rules_engine* engine;
     game_rules_state_result state = {0};
+    game_rules_json_load_result json_load = {0};
     game_rules_load_result load = {0};
     game_rules_move_result move = {0};
     game_rules_move_result invalid_move = {0};
@@ -60,6 +61,12 @@ int main(void)
     assert(game_rules_engine_get_state_data(engine, &state) == GAME_RULES_CALL_OK);
     assert(state.has_state == 0U);
     assert(state.owned_storage != NULL);
+
+    assert(game_rules_engine_load_level_json_data(engine, "{}", 2U, &json_load) ==
+           GAME_RULES_CALL_OK);
+    assert(json_load.status == GAME_RULES_JSON_LOAD_INVALID_JSON);
+    assert(json_load.accepted == 0U);
+    assert(json_load.owned_storage != NULL);
 
     assert(game_rules_engine_move_data(engine, GAME_RULES_DIRECTION_WEST, &move) ==
            GAME_RULES_CALL_OK);
@@ -118,6 +125,9 @@ int main(void)
     game_rules_state_result_dispose(&state);
     game_rules_state_result_dispose(&state);
     assert(bytes_are_zero(&state, sizeof(state)));
+    game_rules_json_load_result_dispose(&json_load);
+    game_rules_json_load_result_dispose(&json_load);
+    assert(bytes_are_zero(&json_load, sizeof(json_load)));
     game_rules_move_result_dispose(&move);
     game_rules_move_result_dispose(&move);
     assert(bytes_are_zero(&move, sizeof(move)));
@@ -140,6 +150,17 @@ int main(void)
     assert(game_rules_engine_get_state_data(NULL, &state) == GAME_RULES_CALL_INVALID_ENGINE);
     assert(bytes_are_zero(&state, sizeof(state)));
     assert(game_rules_engine_get_state_data(NULL, NULL) == GAME_RULES_CALL_INVALID_ARGUMENT);
+
+    memset(&json_load, 0xA5, sizeof(json_load));
+    assert(game_rules_engine_load_level_json_data(NULL, "{}", 2U, &json_load) ==
+           GAME_RULES_CALL_INVALID_ENGINE);
+    assert(bytes_are_zero(&json_load, sizeof(json_load)));
+    memset(&json_load, 0xA5, sizeof(json_load));
+    assert(game_rules_engine_load_level_json_data(NULL, NULL, 0U, &json_load) ==
+           GAME_RULES_CALL_INVALID_ARGUMENT);
+    assert(bytes_are_zero(&json_load, sizeof(json_load)));
+    assert(game_rules_engine_load_level_json_data(NULL, "{}", 2U, NULL) ==
+           GAME_RULES_CALL_INVALID_ARGUMENT);
 
     memset(&move, 0xA5, sizeof(move));
     assert(game_rules_engine_move_data(NULL, GAME_RULES_DIRECTION_EAST, &move) ==
@@ -172,6 +193,7 @@ int main(void)
     game_rules_engine_destroy(NULL);
     game_rules_string_free(NULL);
     game_rules_state_result_dispose(NULL);
+    game_rules_json_load_result_dispose(NULL);
     game_rules_load_result_dispose(NULL);
     game_rules_move_result_dispose(NULL);
     game_rules_rewind_result_dispose(NULL);

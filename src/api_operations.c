@@ -769,14 +769,15 @@ static void copy_snapshot(layout* arena,
 
 static void copy_ticks(layout* arena,
                        const game_rules_session* session,
-                       game_rules_load_result* output)
+                       const game_rules_tick** output_ticks,
+                       uint32_t* output_tick_count)
 {
     game_rules_tick* ticks = (game_rules_tick*)take(arena,
         session->initialization_tick_count, sizeof(game_rules_tick),
         _Alignof(game_rules_tick));
     uint32_t tick_index;
-    output->ticks = ticks;
-    output->tick_count = session->initialization_tick_count;
+    *output_ticks = ticks;
+    *output_tick_count = session->initialization_tick_count;
     for (tick_index = 0U; tick_index < session->initialization_tick_count; ++tick_index) {
         const game_rules_c_tick* source = &session->initialization_ticks[tick_index];
         game_rules_tick measured;
@@ -795,6 +796,22 @@ static void copy_ticks(layout* arena,
     }
 }
 
+static void copy_validation_errors(layout* arena,
+                                   const game_rules_validation_error* errors,
+                                   uint32_t error_count,
+                                   const game_rules_validation_error** output_errors,
+                                   uint32_t* output_error_count)
+{
+    game_rules_validation_error* copied = (game_rules_validation_error*)take(arena,
+        error_count, sizeof(game_rules_validation_error),
+        _Alignof(game_rules_validation_error));
+    *output_errors = copied;
+    *output_error_count = error_count;
+    if (arena->base != NULL && error_count && !arena->failed) {
+        memcpy(copied, errors, error_count * sizeof(game_rules_validation_error));
+    }
+}
+
 static void load_graph(layout* arena,
                        const game_rules_session* current,
                        const game_rules_session* accepted,
@@ -802,13 +819,8 @@ static void load_graph(layout* arena,
                        uint32_t error_count,
                        game_rules_load_result* output)
 {
-    game_rules_validation_error* copied = (game_rules_validation_error*)take(arena,
-        error_count, sizeof(game_rules_validation_error),
-        _Alignof(game_rules_validation_error));
-    output->errors = copied;
-    output->error_count = error_count;
-    if (arena->base != NULL && error_count && !arena->failed)
-        memcpy(copied, errors, error_count * sizeof(game_rules_validation_error));
+    copy_validation_errors(arena, errors, error_count,
+                           &output->errors, &output->error_count);
     if (accepted == NULL) {
         output->status = GAME_RULES_LOAD_INVALID_LEVEL;
         if (current != NULL) {
@@ -821,7 +833,7 @@ static void load_graph(layout* arena,
     output->accepted = 1U;
     output->has_initial_state = 1U;
     copy_resolved(arena, &accepted->initial_state, &output->initial_state);
-    copy_ticks(arena, accepted, output);
+    copy_ticks(arena, accepted, &output->ticks, &output->tick_count);
     output->has_final_state = 1U;
     copy_resolved(arena, &accepted->current_state, &output->final_state);
     output->has_state = 1U;
@@ -855,6 +867,135 @@ static uint32_t make_load_result(const game_rules_engine* engine,
     }
     output->owned_storage = owner;
     return GAME_RULES_CALL_OK;
+}
+
+static void copy_json_error(layout* arena,
+                            const game_rules_c_json_error* source,
+                            game_rules_json_error* output)
+{
+    size_t path_storage_size = 0U;
+    char* path = NULL;
+    if (source->byte_offset > UINT32_MAX || source->path_length > UINT32_MAX ||
+        (source->path_length != 0U && source->path == NULL)) {
+        arena->failed = 1U;
+        return;
+    }
+    if (source->path_length != 0U) {
+        if (!add_size(source->path_length, 1U, &path_storage_size)) {
+            arena->failed = 1U;
+            return;
+        }
+        path = (char*)take(arena, path_storage_size, sizeof(char), _Alignof(char));
+    }
+    output->code = source->code;
+    output->byte_offset = (uint32_t)source->byte_offset;
+    output->path = path;
+    output->path_length = (uint32_t)source->path_length;
+    if (arena->base != NULL && source->path_length != 0U && !arena->failed) {
+        memcpy(path, source->path, source->path_length);
+        path[source->path_length] = '\0';
+    }
+}
+
+static void json_load_graph(layout* arena,
+                            const game_rules_session* current,
+                            const game_rules_session* accepted,
+                            const game_rules_c_decode_result* decoded,
+                            game_rules_json_load_result* output)
+{
+    if (decoded->status == GAME_RULES_C_DECODE_JSON_ERROR) {
+        output->status = GAME_RULES_JSON_LOAD_INVALID_JSON;
+        copy_json_error(arena, &decoded->json_error, &output->json_error);
+        if (current != NULL) {
+            output->has_state = 1U;
+            copy_snapshot(arena, current, &output->state);
+        }
+        return;
+    }
+    if (decoded->status == GAME_RULES_C_DECODE_INVALID_LEVEL) {
+        output->status = GAME_RULES_JSON_LOAD_INVALID_LEVEL;
+        copy_validation_errors(arena, decoded->validation.errors,
+                               decoded->validation.count,
+                               &output->errors, &output->error_count);
+        if (current != NULL) {
+            output->has_state = 1U;
+            copy_snapshot(arena, current, &output->state);
+        }
+        return;
+    }
+
+    output->status = GAME_RULES_JSON_LOAD_LOADED;
+    output->accepted = 1U;
+    output->has_initial_state = 1U;
+    copy_resolved(arena, &accepted->initial_state, &output->initial_state);
+    copy_ticks(arena, accepted, &output->ticks, &output->tick_count);
+    output->has_final_state = 1U;
+    copy_resolved(arena, &accepted->current_state, &output->final_state);
+    output->has_state = 1U;
+    copy_snapshot(arena, accepted, &output->state);
+    output->has_outcome = 1U;
+    output->outcome = accepted->current_state.outcome;
+}
+
+static uint32_t make_json_load_result(const game_rules_engine* engine,
+                                      const game_rules_session* current,
+                                      const game_rules_session* accepted,
+                                      const game_rules_c_decode_result* decoded,
+                                      game_rules_json_load_result* output)
+{
+    layout measure = {0};
+    layout arena = {0};
+    game_rules_json_load_result ignored = {0};
+    void* owner;
+    json_load_graph(&measure, current, accepted, decoded, &ignored);
+    if (measure.failed) return GAME_RULES_CALL_ALLOCATION_FAILED;
+    owner = game_rules_c_allocate_owned(&engine->allocator, measure.offset);
+    if (owner == NULL) return GAME_RULES_CALL_ALLOCATION_FAILED;
+    arena.base = (unsigned char*)owner;
+    arena.capacity = measure.offset;
+    json_load_graph(&arena, current, accepted, decoded, output);
+    if (arena.failed) {
+        game_rules_c_deallocate_owned(owner);
+        memset(output, 0, sizeof(*output));
+        return GAME_RULES_CALL_ALLOCATION_FAILED;
+    }
+    output->owned_storage = owner;
+    return GAME_RULES_CALL_OK;
+}
+
+uint32_t game_rules_c_load_json_data(game_rules_engine* engine,
+                                     const char* json,
+                                     uint32_t length,
+                                     game_rules_json_load_result* result)
+{
+    game_rules_c_decode_result decoded;
+    game_rules_session* replacement = NULL;
+    uint32_t call;
+    game_rules_c_decode_level_json(json, length, &engine->allocator, &decoded);
+    if (decoded.status == GAME_RULES_C_DECODE_ALLOCATION_FAILED) {
+        game_rules_c_decode_result_destroy(&decoded);
+        return GAME_RULES_CALL_ALLOCATION_FAILED;
+    }
+    if (decoded.status == GAME_RULES_C_DECODE_OK) {
+        replacement = game_rules_c_build_resolved_session(
+            &engine->allocator, &decoded.level.view);
+        if (replacement == NULL) {
+            game_rules_c_decode_result_destroy(&decoded);
+            return GAME_RULES_CALL_ALLOCATION_FAILED;
+        }
+    }
+    call = make_json_load_result(engine,
+        engine->session && engine->session->has_level ? engine->session : NULL,
+        replacement, &decoded, result);
+    if (call == GAME_RULES_CALL_OK && replacement != NULL) {
+        game_rules_session* previous = engine->session;
+        engine->session = replacement;
+        replacement = NULL;
+        game_rules_c_destroy_session(previous);
+    }
+    game_rules_c_destroy_session(replacement);
+    game_rules_c_decode_result_destroy(&decoded);
+    return call;
 }
 
 static int typed_header_valid(const game_rules_level_definition* level)

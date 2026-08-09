@@ -163,6 +163,7 @@ static void expect_one_allocation_failure_typed(allocation_tracker* tracker,
 {
     const size_t baseline = tracker->live_count;
     game_rules_state_result state;
+    game_rules_json_load_result json_load;
     game_rules_move_result move;
     game_rules_rewind_result rewind;
 
@@ -172,6 +173,14 @@ static void expect_one_allocation_failure_typed(allocation_tracker* tracker,
            GAME_RULES_CALL_ALLOCATION_FAILED);
     assert(tracker->attempt == 1U);
     assert(bytes_are_zero(&state, sizeof(state)));
+    assert(tracker->live_count == baseline);
+
+    memset(&json_load, 0xA5, sizeof(json_load));
+    tracker_begin_failure(tracker, 0U);
+    assert(game_rules_engine_load_level_json_data(engine, "{}", 2U, &json_load) ==
+           GAME_RULES_CALL_ALLOCATION_FAILED);
+    assert(tracker->attempt == 1U);
+    assert(bytes_are_zero(&json_load, sizeof(json_load)));
     assert(tracker->live_count == baseline);
 
     memset(&move, 0xA5, sizeof(move));
@@ -251,10 +260,12 @@ static void expect_load_failures(allocation_tracker* tracker,
         {{0, 0}, GAME_RULES_HORIZONTAL_EAST, GAME_RULES_VERTICAL_NORTH},
         2U, 1U, cells, 2U, NULL, 0U, entities, 2U};
     size_t json_attempts;
+    size_t json_typed_attempts;
     size_t typed_attempts;
     size_t failure;
     game_rules_engine* engine;
     char* json;
+    game_rules_json_load_result json_load;
     game_rules_load_result load;
 
     {
@@ -294,6 +305,34 @@ static void expect_load_failures(allocation_tracker* tracker,
         tracker_begin_failure(tracker, failure);
         assert(game_rules_engine_load_level(engine, valid_level_json,
                                             (uint32_t)strlen(valid_level_json)) == NULL);
+        assert(game_rules_c_engine_session_marker(engine) == 0U);
+        game_rules_engine_destroy(engine);
+        assert(tracker->invalid_free_count == 0U);
+    }
+
+    tracker_begin_success(tracker);
+    engine = game_rules_engine_create_with_allocator_v1(allocator);
+    assert(engine != NULL);
+    memset(&json_load, 0, sizeof(json_load));
+    tracker_begin_success(tracker);
+    assert(game_rules_engine_load_level_json_data(
+               engine, valid_level_json, (uint32_t)strlen(valid_level_json), &json_load) ==
+           GAME_RULES_CALL_OK);
+    assert(json_load.accepted != 0U && json_load.tick_count == 2U);
+    json_typed_attempts = tracker->attempt;
+    game_rules_json_load_result_dispose(&json_load);
+    game_rules_engine_destroy(engine);
+
+    for (failure = 0U; failure < json_typed_attempts; ++failure) {
+        tracker_begin_success(tracker);
+        engine = game_rules_engine_create_with_allocator_v1(allocator);
+        assert(engine != NULL);
+        memset(&json_load, 0xA5, sizeof(json_load));
+        tracker_begin_failure(tracker, failure);
+        assert(game_rules_engine_load_level_json_data(
+                   engine, valid_level_json, (uint32_t)strlen(valid_level_json), &json_load) ==
+               GAME_RULES_CALL_ALLOCATION_FAILED);
+        assert(bytes_are_zero(&json_load, sizeof(json_load)));
         assert(game_rules_c_engine_session_marker(engine) == 0U);
         game_rules_engine_destroy(engine);
         assert(tracker->invalid_free_count == 0U);

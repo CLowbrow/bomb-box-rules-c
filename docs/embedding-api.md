@@ -21,9 +21,17 @@ The basic lifecycle is:
 ```c
 game_rules_engine* engine = game_rules_engine_create();
 
+game_rules_json_load_result json_loaded = {0};
+uint32_t call = game_rules_engine_load_level_json_data(
+    engine, level_json, level_json_length, &json_loaded);
+if (call == GAME_RULES_CALL_OK && json_loaded.accepted) {
+    /* Read json_loaded.state, json_loaded.ticks, and their typed arrays. */
+}
+game_rules_json_load_result_dispose(&json_loaded);
+
 game_rules_level_definition level = { /* caller-owned arrays and counts */ };
 game_rules_load_result loaded = {0};
-uint32_t call = game_rules_engine_load_level_data(engine, &level, &loaded);
+call = game_rules_engine_load_level_data(engine, &level, &loaded);
 if (call == GAME_RULES_CALL_OK && loaded.accepted) {
     /* Read loaded.state, loaded.ticks, and their typed arrays. */
 }
@@ -38,6 +46,13 @@ game_rules_move_result_dispose(&moved);
 
 game_rules_engine_destroy(engine);
 ```
+
+`game_rules_engine_load_level_json_data()` keeps JSON as the serialized level input but returns a
+typed result instead of serializing the response back to JSON. `status` distinguishes loaded,
+invalid-JSON, and invalid-level outcomes; `accepted` is nonzero only when the engine commits the new
+level. Invalid JSON supplies `json_error`, including a UTF-8 JSON Pointer byte view. Invalid level
+data supplies ordered `game_rules_validation_error` values. Both rejection cases include the
+unchanged current snapshot when an earlier level exists.
 
 `game_rules_engine_load_level_data()` borrows the input arrays only for that call. The engine
 copies and canonicalizes an accepted level. A zero count permits a null pointer; a nonzero count
@@ -95,7 +110,7 @@ Static cells are row-major; fixtures and entities use the engine's canonical spa
 Resolved-state arrays include entities, ascending armed-barrel IDs, palette-ordered active switch
 colors, row-major open doors, and outcome.
 
-Load and move results include initial and final dynamic states plus every ordered
+JSON-load, typed-level-load, and move results include initial and final dynamic states plus every ordered
 `game_rules_tick`. Each tick contains its ordered semantic events and complete authoritative
 `state_after`. The top-level snapshot is the complete current renderable state. Rewind returns its
 restored dynamic state, semantic event, and complete current snapshot.

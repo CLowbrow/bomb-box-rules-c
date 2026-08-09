@@ -25,6 +25,8 @@ _Static_assert(sizeof(GAME_RULES_EVENT_MOVE_BLOCKED) == sizeof(int),
 _Static_assert(GAME_RULES_DIRECTION_NORTH == 0, "direction enum drift");
 _Static_assert(GAME_RULES_DIRECTION_WEST == 3, "direction enum drift");
 _Static_assert(GAME_RULES_CALL_ALLOCATION_FAILED == 3, "call enum drift");
+_Static_assert(GAME_RULES_JSON_LOAD_INVALID_LEVEL == 2, "JSON load enum drift");
+_Static_assert(GAME_RULES_JSON_INVALID_ENTITY_ID == 12, "JSON error enum drift");
 _Static_assert(GAME_RULES_MOVE_LEVEL_TERMINAL == 10, "move enum drift");
 _Static_assert(GAME_RULES_VALIDATION_INVALID_ENTITY_ID == 20, "validation enum drift");
 _Static_assert(GAME_RULES_EVENT_LEVEL_LOST == 10, "event enum drift");
@@ -52,6 +54,8 @@ ASSERT_FIELD(game_rules_entity, coordinate, 12U, 8U);
 ASSERT_FIELD(game_rules_entity, bottom_half_steps, 20U, 4U);
 ASSERT_FIELD(game_rules_validation_error, code, 0U, 4U);
 ASSERT_FIELD(game_rules_validation_error, coordinate, 4U, 8U);
+ASSERT_FIELD(game_rules_json_error, code, 0U, 4U);
+ASSERT_FIELD(game_rules_json_error, byte_offset, 4U, 4U);
 ASSERT_FIELD(game_rules_event, kind, 0U, 4U);
 ASSERT_FIELD(game_rules_event, direction, 4U, 4U);
 ASSERT_FIELD(game_rules_event, move_status, 8U, 4U);
@@ -60,6 +64,9 @@ ASSERT_FIELD(game_rules_event, move_status, 8U, 4U);
 ASSERT_LAYOUT(game_rules_entity, 24U, 8U);
 ASSERT_LAYOUT(game_rules_validation_error, 24U, 8U);
 ASSERT_FIELD(game_rules_validation_error, entity_id, 16U, 8U);
+ASSERT_LAYOUT(game_rules_json_error, 24U, 8U);
+ASSERT_FIELD(game_rules_json_error, path, 8U, 8U);
+ASSERT_FIELD(game_rules_json_error, path_length, 16U, 4U);
 ASSERT_LAYOUT(game_rules_event, 80U, 8U);
 ASSERT_FIELD(game_rules_event, entity_id, 16U, 8U);
 ASSERT_FIELD(game_rules_event, other_entity_id, 24U, 8U);
@@ -107,6 +114,14 @@ ASSERT_FIELD(game_rules_load_result, ticks, 88U, 8U);
 ASSERT_FIELD(game_rules_load_result, final_state, 104U, 64U);
 ASSERT_FIELD(game_rules_load_result, state, 176U, 120U);
 ASSERT_FIELD(game_rules_load_result, owned_storage, 304U, 8U);
+ASSERT_LAYOUT(game_rules_json_load_result, 336U, 8U);
+ASSERT_FIELD(game_rules_json_load_result, json_error, 8U, 24U);
+ASSERT_FIELD(game_rules_json_load_result, errors, 32U, 8U);
+ASSERT_FIELD(game_rules_json_load_result, initial_state, 48U, 64U);
+ASSERT_FIELD(game_rules_json_load_result, ticks, 112U, 8U);
+ASSERT_FIELD(game_rules_json_load_result, final_state, 128U, 64U);
+ASSERT_FIELD(game_rules_json_load_result, state, 200U, 120U);
+ASSERT_FIELD(game_rules_json_load_result, owned_storage, 328U, 8U);
 ASSERT_LAYOUT(game_rules_move_result, 320U, 8U);
 ASSERT_FIELD(game_rules_move_result, events, 16U, 8U);
 ASSERT_FIELD(game_rules_move_result, initial_state, 32U, 64U);
@@ -137,6 +152,8 @@ ASSERT_LAYOUT(game_rules_snapshot, 76U, 4U);
 ASSERT_LAYOUT(game_rules_tick, 48U, 4U);
 ASSERT_LAYOUT(game_rules_state_result, 84U, 4U);
 ASSERT_LAYOUT(game_rules_load_result, 196U, 4U);
+ASSERT_LAYOUT(game_rules_json_error, 16U, 4U);
+ASSERT_LAYOUT(game_rules_json_load_result, 212U, 4U);
 ASSERT_LAYOUT(game_rules_move_result, 204U, 4U);
 ASSERT_LAYOUT(game_rules_rewind_result, 148U, 4U);
 ASSERT_LAYOUT(game_rules_allocator_v1, 20U, 4U);
@@ -153,6 +170,8 @@ typedef const char* (*status_fn)(void);
 typedef game_rules_engine* (*create_fn)(void);
 typedef void (*destroy_fn)(game_rules_engine*);
 typedef char* (*load_json_fn)(game_rules_engine*, const char*, uint32_t);
+typedef uint32_t (*load_json_data_fn)(game_rules_engine*, const char*, uint32_t,
+                                     game_rules_json_load_result*);
 typedef uint32_t (*load_data_fn)(game_rules_engine*, const game_rules_level_definition*,
                                  game_rules_load_result*);
 
@@ -161,13 +180,14 @@ static status_fn const status_pointer = &game_rules_engine_status;
 static create_fn const create_pointer = &game_rules_engine_create;
 static destroy_fn const destroy_pointer = &game_rules_engine_destroy;
 static load_json_fn const load_json_pointer = &game_rules_engine_load_level;
+static load_json_data_fn const load_json_data_pointer = &game_rules_engine_load_level_json_data;
 static load_data_fn const load_data_pointer = &game_rules_engine_load_level_data;
 
 int main(void)
 {
     game_rules_engine* engine;
     if (api_version_pointer() != 1U || status_pointer() == NULL ||
-        load_json_pointer == NULL || load_data_pointer == NULL) {
+        load_json_pointer == NULL || load_json_data_pointer == NULL || load_data_pointer == NULL) {
         return 1;
     }
     engine = create_pointer();

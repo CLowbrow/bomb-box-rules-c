@@ -7,6 +7,7 @@
 static_assert(std::is_standard_layout_v<game_rules_coordinate>);
 static_assert(std::is_standard_layout_v<game_rules_event>);
 static_assert(std::is_standard_layout_v<game_rules_load_result>);
+static_assert(std::is_standard_layout_v<game_rules_json_load_result>);
 static_assert(std::is_same_v<decltype(&game_rules_api_version), std::uint32_t (*)(void)>);
 static_assert(std::is_same_v<decltype(&game_rules_engine_create), game_rules_engine* (*)(void)>);
 static_assert(std::is_same_v<decltype(&game_rules_engine_destroy),
@@ -26,6 +27,9 @@ static_assert(std::is_same_v<decltype(&game_rules_data_api_version),
 static_assert(std::is_same_v<decltype(&game_rules_engine_get_state_data),
                              std::uint32_t (*)(const game_rules_engine*,
                                                game_rules_state_result*)>);
+static_assert(std::is_same_v<decltype(&game_rules_engine_load_level_json_data),
+                             std::uint32_t (*)(game_rules_engine*, const char*, std::uint32_t,
+                                               game_rules_json_load_result*)>);
 static_assert(std::is_same_v<decltype(&game_rules_engine_load_level_data),
                              std::uint32_t (*)(game_rules_engine*,
                                                const game_rules_level_definition*,
@@ -38,6 +42,8 @@ static_assert(std::is_same_v<decltype(&game_rules_engine_rewind_data),
                                                game_rules_rewind_result*)>);
 static_assert(std::is_same_v<decltype(&game_rules_state_result_dispose),
                              void (*)(game_rules_state_result*)>);
+static_assert(std::is_same_v<decltype(&game_rules_json_load_result_dispose),
+                             void (*)(game_rules_json_load_result*)>);
 static_assert(std::is_same_v<decltype(&game_rules_load_result_dispose),
                              void (*)(game_rules_load_result*)>);
 static_assert(std::is_same_v<decltype(&game_rules_move_result_dispose),

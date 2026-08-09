@@ -15,6 +15,14 @@ static const char minimal[] =
     "\"fixtures\":[],\"entities\":[{\"id\":\"1\",\"type\":\"player\","
     "\"coordinate\":{\"x\":0,\"y\":0},\"bottomHalfSteps\":0}]}";
 
+static const char invalid_level[] =
+    "{\"format\":\"game-rules-level\",\"version\":1,"
+    "\"coordinateSystem\":{\"origin\":{\"x\":0,\"y\":0},\"positiveX\":\"east\",\"positiveY\":\"north\"},"
+    "\"width\":2,\"height\":1,"
+    "\"cells\":[{\"coordinate\":{\"x\":0,\"y\":0},\"type\":\"flat\",\"elevation\":0}],"
+    "\"fixtures\":[],\"entities\":[{\"id\":\"1\",\"type\":\"player\","
+    "\"coordinate\":{\"x\":0,\"y\":0},\"bottomHalfSteps\":0}]}";
+
 static void expect_contains(char* json, const char* fragment)
 {
     assert(json != NULL);
@@ -126,6 +134,59 @@ static void test_json_format_errors(void)
     expect_contains(game_rules_engine_load_level(engine, minimal, (uint32_t)strlen(minimal)),
                     "\"status\":\"loaded\"");
     game_rules_engine_destroy(engine);
+}
+
+static void test_typed_json_load_boundary(void)
+{
+    game_rules_engine* engine = game_rules_engine_create();
+    game_rules_json_load_result loaded = {0};
+    uint32_t index;
+    int found_cell_count_error = 0;
+    assert(engine != NULL);
+
+    assert(game_rules_engine_load_level_json_data(
+               engine, minimal, (uint32_t)strlen(minimal), &loaded) == GAME_RULES_CALL_OK);
+    assert(loaded.status == GAME_RULES_JSON_LOAD_LOADED);
+    assert(loaded.accepted != 0U && loaded.has_state != 0U);
+    assert(loaded.state.resolved.entity_count == 1U);
+    assert(loaded.state.resolved.entities[0].id == 1U);
+    assert(loaded.error_count == 0U && loaded.errors == NULL);
+    assert(loaded.json_error.path == NULL && loaded.json_error.path_length == 0U);
+    assert(loaded.owned_storage != NULL);
+    game_rules_json_load_result_dispose(&loaded);
+
+    assert(game_rules_engine_load_level_json_data(engine, "{}", 2U, &loaded) ==
+           GAME_RULES_CALL_OK);
+    assert(loaded.status == GAME_RULES_JSON_LOAD_INVALID_JSON);
+    assert(loaded.accepted == 0U && loaded.has_state != 0U);
+    assert(loaded.json_error.code == GAME_RULES_JSON_MISSING_MEMBER);
+    assert(loaded.json_error.byte_offset == 0U);
+    assert(loaded.json_error.path_length == strlen("/format"));
+    assert(memcmp(loaded.json_error.path, "/format", loaded.json_error.path_length) == 0);
+    assert(loaded.state.resolved.entities[0].id == 1U);
+    game_rules_json_load_result_dispose(&loaded);
+
+    assert(game_rules_engine_load_level_json_data(
+               engine, invalid_level, (uint32_t)strlen(invalid_level), &loaded) ==
+           GAME_RULES_CALL_OK);
+    assert(loaded.status == GAME_RULES_JSON_LOAD_INVALID_LEVEL);
+    assert(loaded.accepted == 0U && loaded.has_state != 0U);
+    assert(loaded.error_count != 0U && loaded.errors != NULL);
+    for (index = 0U; index < loaded.error_count; ++index) {
+        if (loaded.errors[index].code == GAME_RULES_VALIDATION_CELL_COUNT_MISMATCH) {
+            found_cell_count_error = 1;
+        }
+    }
+    assert(found_cell_count_error);
+    assert(loaded.state.resolved.entities[0].id == 1U);
+    game_rules_json_load_result_dispose(&loaded);
+
+    assert(game_rules_engine_load_level_json_data(
+               engine, minimal, (uint32_t)strlen(minimal), &loaded) == GAME_RULES_CALL_OK);
+    game_rules_engine_destroy(engine);
+    assert(loaded.state.level.cell_count == 1U);
+    assert(loaded.state.resolved.entities[0].id == 1U);
+    game_rules_json_load_result_dispose(&loaded);
 }
 
 static void test_typed_boundary_and_ownership(void)
@@ -374,6 +435,7 @@ static void test_all_validation_codes(void)
 int main(void)
 {
     test_json_format_errors();
+    test_typed_json_load_boundary();
     test_typed_boundary_and_ownership();
     test_initial_resolution_and_snapshot_graphs();
     test_empty_snapshot_collections();

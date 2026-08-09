@@ -210,6 +210,10 @@ const char* game_rules_c_validation_error_name(uint32_t code);
 char* game_rules_c_load_json(game_rules_engine* engine,
                              const char* json,
                              uint32_t length);
+uint32_t game_rules_c_load_json_data(game_rules_engine* engine,
+                                     const char* json,
+                                     uint32_t length,
+                                     game_rules_json_load_result* result);
 char* game_rules_c_get_state_json(game_rules_engine* engine);
 uint32_t game_rules_c_get_state_data(const game_rules_engine* engine,
                                      game_rules_state_result* result);

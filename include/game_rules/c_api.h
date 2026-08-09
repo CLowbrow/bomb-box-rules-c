@@ -95,6 +95,28 @@ enum {
 };
 
 enum {
+    GAME_RULES_JSON_LOAD_LOADED = 0,
+    GAME_RULES_JSON_LOAD_INVALID_JSON = 1,
+    GAME_RULES_JSON_LOAD_INVALID_LEVEL = 2,
+};
+
+enum {
+    GAME_RULES_JSON_INVALID_JSON = 0,
+    GAME_RULES_JSON_DOCUMENT_TOO_LARGE = 1,
+    GAME_RULES_JSON_NESTING_TOO_DEEP = 2,
+    GAME_RULES_JSON_ROOT_NOT_OBJECT = 3,
+    GAME_RULES_JSON_MISSING_MEMBER = 4,
+    GAME_RULES_JSON_UNKNOWN_MEMBER = 5,
+    GAME_RULES_JSON_DUPLICATE_MEMBER = 6,
+    GAME_RULES_JSON_INVALID_MEMBER_TYPE = 7,
+    GAME_RULES_JSON_INTEGER_OUT_OF_RANGE = 8,
+    GAME_RULES_JSON_INVALID_ENUM_VALUE = 9,
+    GAME_RULES_JSON_INVALID_FORMAT = 10,
+    GAME_RULES_JSON_UNSUPPORTED_VERSION = 11,
+    GAME_RULES_JSON_INVALID_ENTITY_ID = 12,
+};
+
+enum {
     GAME_RULES_MOVE_MOVED = 0,
     GAME_RULES_MOVE_NO_LEVEL = 1,
     GAME_RULES_MOVE_INVALID_DIRECTION = 2,
@@ -212,6 +234,14 @@ typedef struct game_rules_validation_error {
     uint64_t entity_id;
 } game_rules_validation_error;
 
+// path is a UTF-8 JSON Pointer byte view. It is not present when path_length is zero.
+typedef struct game_rules_json_error {
+    uint32_t code;
+    uint32_t byte_offset;
+    const char* path;
+    uint32_t path_length;
+} game_rules_json_error;
+
 typedef struct game_rules_resolved_state {
     const game_rules_entity* entities;
     uint32_t entity_count;
@@ -296,6 +326,29 @@ typedef struct game_rules_load_result {
     void* owned_storage;
 } game_rules_load_result;
 
+// JSON input is decoded by the engine, while the response stays in the typed data ABI. On a
+// rejected load, state is the unchanged current snapshot when an earlier level exists. json_error
+// is meaningful only for GAME_RULES_JSON_LOAD_INVALID_JSON; errors contains validation failures
+// only for GAME_RULES_JSON_LOAD_INVALID_LEVEL.
+typedef struct game_rules_json_load_result {
+    uint32_t status;
+    uint32_t accepted;
+    game_rules_json_error json_error;
+    const game_rules_validation_error* errors;
+    uint32_t error_count;
+    uint32_t has_initial_state;
+    game_rules_resolved_state initial_state;
+    const game_rules_tick* ticks;
+    uint32_t tick_count;
+    uint32_t has_final_state;
+    game_rules_resolved_state final_state;
+    uint32_t has_state;
+    game_rules_snapshot state;
+    uint32_t has_outcome;
+    uint32_t outcome;
+    void* owned_storage;
+} game_rules_json_load_result;
+
 typedef struct game_rules_move_result {
     uint32_t status;
     uint32_t accepted;
@@ -332,6 +385,10 @@ typedef struct game_rules_rewind_result {
 
 uint32_t game_rules_engine_get_state_data(const game_rules_engine* engine,
                                           game_rules_state_result* out_result);
+uint32_t game_rules_engine_load_level_json_data(game_rules_engine* engine,
+                                                const char* level_json,
+                                                uint32_t level_json_length,
+                                                game_rules_json_load_result* out_result);
 uint32_t game_rules_engine_load_level_data(game_rules_engine* engine,
                                            const game_rules_level_definition* level,
                                            game_rules_load_result* out_result);
@@ -342,6 +399,7 @@ uint32_t game_rules_engine_rewind_data(game_rules_engine* engine,
                                        game_rules_rewind_result* out_result);
 
 void game_rules_state_result_dispose(game_rules_state_result* result);
+void game_rules_json_load_result_dispose(game_rules_json_load_result* result);
 void game_rules_load_result_dispose(game_rules_load_result* result);
 void game_rules_move_result_dispose(game_rules_move_result* result);
 void game_rules_rewind_result_dispose(game_rules_rewind_result* result);
