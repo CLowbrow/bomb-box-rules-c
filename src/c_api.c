@@ -8,11 +8,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_MSC_VER)
+typedef long double game_rules_max_align_t;
+#else
+typedef max_align_t game_rules_max_align_t;
+#endif
+
 typedef union game_rules_owned_header {
     struct {
         game_rules_c_allocator allocator;
     } value;
-    max_align_t alignment;
+    game_rules_max_align_t alignment;
 } game_rules_owned_header;
 
 static void* system_allocate(void* context, size_t size)
